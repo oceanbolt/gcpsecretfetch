@@ -7,9 +7,13 @@ import (
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 )
 
-func (svc *secretClient) UpdateSecrets(secrets map[string]string, disablePrior bool) error {
+func UpdateSecrets(project string, secrets map[string]string, disablePrior bool) error {
+	grabber, err := newClient(project)
+	if err != nil {
+		return err
+	}
 	for k, v := range secrets {
-		if err := svc.updateSingleVersion(k, v, disablePrior); err != nil {
+		if err := grabber.updateSingleVersion(k, v, disablePrior); err != nil {
 			return err
 		}
 	}
