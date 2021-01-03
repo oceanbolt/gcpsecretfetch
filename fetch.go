@@ -2,40 +2,15 @@
 package gcpsecretfetch
 
 import (
-secretmanager "cloud.google.com/go/secretmanager/apiv1"
-"context"
-"fmt"
-"github.com/panjf2000/ants/v2"
-"github.com/pkg/errors"
-secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
-"reflect"
-"sync"
+	"fmt"
+	"github.com/panjf2000/ants/v2"
+	"github.com/pkg/errors"
+	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	"reflect"
+	"sync"
 )
 
-type fetcher struct {
-	client  *secretmanager.Client
-	project string
-	ctx     context.Context
-}
-
-func newFetcher(project string) (*fetcher, error) {
-	ctx := context.Background()
-	client, err := secretmanager.NewClient(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not create secretmanager client")
-	}
-
-	grabber := fetcher{
-		client:  client,
-		project: project,
-		ctx:     ctx,
-	}
-
-	return &grabber, nil
-
-}
-
-func (svc *fetcher) accessSecretVersion(name string) (string, error) {
+func (svc *secretClient) accessSecretVersion(name string) (string, error) {
 	req := &secretmanagerpb.AccessSecretVersionRequest{
 		Name: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", svc.project, name),
 	}
@@ -53,7 +28,6 @@ type params struct {
 	name string
 }
 
-
 // InitializeConfig initializes a config struct by getting the secrets from GCP Secret Manager
 //
 // This function works by reflecting on the fields in the passed pointer struct, and
@@ -62,7 +36,7 @@ type params struct {
 // the config struct must only have string fields.
 func InitializeConfig(cfg interface{}, project string) error {
 
-	grabber, err := newFetcher(project)
+	grabber, err := newClient(project)
 	if err != nil {
 		return err
 	}
@@ -125,7 +99,7 @@ func InitializeConfig(cfg interface{}, project string) error {
 	return nil
 }
 
-func (svc *fetcher) setValue(p params) error {
+func (svc *secretClient) setValue(p params) error {
 	secretString, err := svc.accessSecretVersion(p.name)
 	if err != nil {
 		return err
@@ -134,4 +108,3 @@ func (svc *fetcher) setValue(p params) error {
 	p.v.SetString(secretString)
 	return nil
 }
-
