@@ -40,11 +40,11 @@ type params struct {
 func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileAction) error {
 
 	grabber, err := newClient(project)
-	defer grabber.client.Close()
-
 	if err != nil {
 		return err
 	}
+	defer grabber.client.Close()
+
 	t := reflect.TypeOf(cfg)
 
 	if t.Kind() != reflect.Ptr {
