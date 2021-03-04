@@ -109,6 +109,9 @@ func (svc *secretClient) listVersions(name string) ([]*secretmanagerpb.SecretVer
 
 func (svc *secretClient) deletePrior(versions []*secretmanagerpb.SecretVersion) error {
 	for _, v := range versions {
+		if v.State == secretmanagerpb.SecretVersion_DESTROYED {
+			continue
+		}
 		req := &secretmanagerpb.DestroySecretVersionRequest{Name: v.Name}
 		_, err := svc.client.DestroySecretVersion(svc.ctx, req)
 		if err != nil {

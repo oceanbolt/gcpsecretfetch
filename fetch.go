@@ -3,9 +3,12 @@ package gcpsecretfetch
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	"log"
+	"os"
 	"reflect"
 	"sync"
 )
@@ -34,15 +37,17 @@ type params struct {
 // then dispatching calls to get the secret payloads from GCP for the corresponding secrets.
 // The function must be passed a pointer to an arbitrary config struct, and
 // the config struct must only have string fields.
-func InitializeConfig(cfg interface{}, project string) error {
+func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileAction) error {
 
 	grabber, err := newClient(project)
+	defer grabber.client.Close()
+
 	if err != nil {
 		return err
 	}
-
 	t := reflect.TypeOf(cfg)
-	if t.Kind() == reflect.Struct {
+
+	if t.Kind() != reflect.Ptr {
 		return errors.New("cfg argument must be a pointer to a struct")
 	}
 
@@ -53,16 +58,44 @@ func InitializeConfig(cfg interface{}, project string) error {
 
 	var wg sync.WaitGroup
 
-	c := make(chan error, s.NumField())
+	type errorStruct struct {
+		err  error
+		name string
+	}
+
+	if envFileAction != DISABLE {
+		err := godotenv.Load()
+		if err != nil {
+			//return errors.New("Error loading .env file. If you dont want to use .env files, then specify `DISABLE` as envFileAction.")
+			log.Print("Error loading .env file. If you dont want to use .env files, then specify `DISABLE` as envFileAction.")
+		}
+	}
+
+	c := make(chan errorStruct, s.NumField())
 
 	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
+		defer wg.Done()
 		p := i.(params)
-		err := grabber.setValue(p)
 
-		if err != nil {
-			c <- err
+		secret := os.Getenv(p.name)
+
+		if envFileAction == PRIORITIZE && secret != "" {
+			grabber.setValueLiteral(p, secret)
+			return
 		}
-		wg.Done()
+
+		err := grabber.setValueFromGcp(p)
+		if err == nil {
+			return
+		}
+
+		if envFileAction == FALLBACK && secret != "" {
+			grabber.setValueLiteral(p, secret)
+			return
+		}
+
+		c <- errorStruct{err, p.name}
+
 	})
 	defer ants.Release()
 
@@ -91,15 +124,15 @@ func InitializeConfig(cfg interface{}, project string) error {
 	close(c)
 
 	for err := range c {
-		if err != nil {
-			return err
+		if err.err != nil {
+			return err.err
 		}
 	}
 
 	return nil
 }
 
-func (svc *secretClient) setValue(p params) error {
+func (svc *secretClient) setValueFromGcp(p params) error {
 	secretString, err := svc.accessSecretVersion(p.name)
 	if err != nil {
 		return err
@@ -108,3 +141,15 @@ func (svc *secretClient) setValue(p params) error {
 	p.v.SetString(secretString)
 	return nil
 }
+
+func (svc *secretClient) setValueLiteral(p params, secretString string) {
+	p.v.SetString(secretString)
+}
+
+type EnvFileAction string
+
+const (
+	PRIORITIZE EnvFileAction = "prioritize"
+	DISABLE    EnvFileAction = "disable"
+	FALLBACK   EnvFileAction = "fallback"
+)
