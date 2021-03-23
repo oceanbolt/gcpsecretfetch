@@ -3,7 +3,9 @@ package gcpsecretfetch
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"reflect"
 	"testing"
+	"time"
 )
 
 const GCP_PROJECT = "ob-playground"
@@ -124,4 +126,41 @@ func TestStructWithNonStringField(t *testing.T) {
 	err := InitializeConfig(cfg, "bad-project-name-alkdjwopiunhauwihd", FALLBACK)
 	assert.Error(t, err)
 
+}
+
+func TestStructYaml(t *testing.T) {
+
+	type config struct {
+		MyvaL int
+		Key   struct {
+			Nested string
+		}
+	}
+
+	var cfg config
+	err := InitializeConfigYaml(&cfg, GCP_PROJECT, "yaml-example")
+	assert.NoError(t, err)
+
+}
+
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Ptr:
+		return v.IsNil()
+	case reflect.Struct:
+		if t, ok := v.Interface().(time.Time); ok {
+			return t.IsZero()
+		}
+	}
+	return false
 }

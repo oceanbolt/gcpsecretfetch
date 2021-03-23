@@ -7,23 +7,24 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	"gopkg.in/yaml.v2"
 	"log"
 	"os"
 	"reflect"
 	"sync"
 )
 
-func (svc *secretClient) accessSecretVersion(name string) (string, error) {
+func (svc *secretClient) accessSecretVersion(name string) ([]byte, error) {
 	req := &secretmanagerpb.AccessSecretVersionRequest{
 		Name: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", svc.project, name),
 	}
 
 	secret, err := svc.client.AccessSecretVersion(svc.ctx, req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	s := string(secret.Payload.Data)
-	return s, nil
+
+	return secret.Payload.Data, nil
 }
 
 type params struct {
@@ -37,6 +38,38 @@ type params struct {
 // then dispatching calls to get the secret payloads from GCP for the corresponding secrets.
 // The function must be passed a pointer to an arbitrary config struct, and
 // the config struct must only have string fields.
+func InitializeConfigYaml(cfg interface{}, project string, secret string) error {
+
+	grabber, err := newClient(project)
+	if err != nil {
+		return err
+	}
+	defer grabber.client.Close()
+
+	t := reflect.TypeOf(cfg)
+
+	if t.Kind() != reflect.Ptr {
+		return errors.New("cfg argument must be a pointer to a struct")
+	}
+
+	s := reflect.ValueOf(cfg).Elem()
+	if s.Kind() != reflect.Struct {
+		return errors.New("cfg argument must be a pointer to a struct")
+	}
+
+	bytes, err := grabber.accessSecretVersion(secret)
+	if err != nil {
+		return err
+	}
+
+	err = yaml.Unmarshal(bytes, cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileAction) error {
 
 	grabber, err := newClient(project)
@@ -138,7 +171,7 @@ func (svc *secretClient) setValueFromGcp(p params) error {
 		return err
 	}
 
-	p.v.SetString(secretString)
+	p.v.SetString(string(secretString))
 	return nil
 }
 

@@ -11,4 +11,5 @@ require (
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/net v0.0.0-20201026091529-146b70c837a4 // indirect
 	google.golang.org/genproto v0.0.0-20201026171402-d4b8fe4fd877
+	gopkg.in/yaml.v2 v2.2.7
 )
