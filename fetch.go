@@ -6,10 +6,12 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
+
 	"reflect"
 	"sync"
 )
@@ -28,8 +30,9 @@ func (svc *secretClient) accessSecretVersion(name string) ([]byte, error) {
 }
 
 type params struct {
-	v    *reflect.Value
-	name string
+	v     *reflect.Value
+	name  string
+	viper *viper.Viper
 }
 
 // InitializeConfig initializes a config struct by getting the secrets from GCP Secret Manager
@@ -68,6 +71,80 @@ func InitializeConfigYaml(cfg interface{}, project string, secret string) error 
 	}
 
 	return nil
+}
+
+func InitializeConfigViper(cfg interface{}, project string, viperP *viper.Viper) (error, []error) {
+
+	grabber, err := newClient(project)
+	if err != nil {
+		return err, nil
+	}
+	defer grabber.client.Close()
+
+	t := reflect.TypeOf(cfg)
+
+	if t.Kind() != reflect.Ptr {
+		return errors.New("cfg argument must be a pointer to a struct"), nil
+	}
+
+	s := reflect.ValueOf(cfg).Elem()
+	if s.Kind() != reflect.Struct {
+		return errors.New("cfg argument must be a pointer to a struct"), nil
+	}
+
+	var wg sync.WaitGroup
+
+	type errorStruct struct {
+		err  error
+		name string
+	}
+
+	c := make(chan errorStruct, s.NumField())
+
+	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
+		defer wg.Done()
+		p := i.(params)
+
+		err := grabber.setValueFromGcp(p)
+		if err == nil {
+			return
+		}
+
+		c <- errorStruct{err, p.name}
+
+	})
+	defer ants.Release()
+
+	for i := 0; i < s.NumField(); i++ {
+
+		f := s.Field(i)
+		name := s.Type().Field(i).Name
+
+		if !f.IsValid() || !f.CanSet() {
+			return errors.New(fmt.Sprintf("field %s is not valid - check if field is value and that it is exported from struct", name)), nil
+		}
+
+		if f.Kind() != reflect.String {
+			return errors.New(fmt.Sprintf("pointer struct can only contain string fields - field '%s' is of type '%s'", name, f.Type().Name())), nil
+		}
+		wg.Add(1)
+		err := p.Invoke(params{v: &f, name: name, viper: viperP})
+		if err != nil {
+			return err, nil
+		}
+
+	}
+
+	wg.Wait()
+
+	close(c)
+
+	var errs []error
+	for err := range c {
+		errs = append(errs, err.err)
+	}
+
+	return err, errs
 }
 
 func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileAction) error {
@@ -145,7 +222,7 @@ func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileActi
 			return errors.New(fmt.Sprintf("pointer struct can only contain string fields - field '%s' is of type '%s'", name, f.Type().Name()))
 		}
 		wg.Add(1)
-		err := p.Invoke(params{&f, name})
+		err := p.Invoke(params{v: &f, name: name})
 		if err != nil {
 			return err
 		}
@@ -169,6 +246,10 @@ func (svc *secretClient) setValueFromGcp(p params) error {
 	secretString, err := svc.accessSecretVersion(p.name)
 	if err != nil {
 		return err
+	}
+
+	if p.viper != nil {
+		p.viper.Set(p.name, secretString)
 	}
 
 	p.v.SetString(string(secretString))
