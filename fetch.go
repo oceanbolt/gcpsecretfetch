@@ -242,6 +242,8 @@ func InitializeConfig(cfg interface{}, project string, envFileAction EnvFileActi
 	return nil
 }
 
+var mux sync.Mutex
+
 func (svc *secretClient) setValueFromGcp(p params) error {
 	secretString, err := svc.accessSecretVersion(p.name)
 	if err != nil {
@@ -249,7 +251,9 @@ func (svc *secretClient) setValueFromGcp(p params) error {
 	}
 
 	if p.viper != nil {
+		mux.Lock()
 		p.viper.Set(p.name, secretString)
+		mux.Unlock()
 	}
 
 	p.v.SetString(string(secretString))
