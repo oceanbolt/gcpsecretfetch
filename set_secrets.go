@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 	"strings"
 	"sync"
@@ -80,7 +79,6 @@ func (svc *secretClient) updateSingleVersion(secretName string, secretValue stri
 	}
 	latest, err := svc.accessSecretVersion(secretName)
 	if string(latest) == secretValue {
-		log.Debug().Msg("skipping secret " + secretName + ", value was unchanged")
 		return nil
 	}
 
