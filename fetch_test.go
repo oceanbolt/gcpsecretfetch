@@ -4,12 +4,23 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"log"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 )
 
-const GCP_PROJECT = "ob-playground"
+const GCP_PROJECT_ENV_KEY = "GCP_PROJECT_ID"
+
+var GCP_PROJECT string
+
+func init() {
+	GCP_PROJECT = os.Getenv(GCP_PROJECT_ENV_KEY)
+	if GCP_PROJECT == "" {
+		log.Fatal(GCP_PROJECT_ENV_KEY + " env var must be defined")
+	}
+}
 
 func TestBadProjectUpdate(t *testing.T) {
 	err := UpdateSecrets("bad-project-name-alkdjwopiunhauwihd", map[string]string{"SECRET_IDENTIFIER": "SECRET_VALUE", "BOTH_IDENTIFIER": "GCP"}, true)
