@@ -8,7 +8,7 @@ import (
 )
 
 func UpdateSecrets(project string, secrets map[string]string, disablePrior bool) error {
-	grabber, err := newClient(project)
+	grabber, err := newClient(project, nil)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (svc *secretClient) addVersion(name string, value string) (*secretmanagerpb
 	}
 
 	// Call the API.
-	version, err := svc.client.AddSecretVersion(svc.ctx, addSecretVersionReq)
+	version, err := svc.gcpClient.AddSecretVersion(svc.ctx, addSecretVersionReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to add secret version: "+addSecretVersionReq.String())
 	}
@@ -63,7 +63,7 @@ func (svc *secretClient) getSecret(name string) (*secretmanagerpb.Secret, error)
 		Name: fmt.Sprintf("projects/%s/secrets/%s", svc.project, name),
 	}
 
-	secret, err := svc.client.GetSecret(svc.ctx, getSecretReq)
+	secret, err := svc.gcpClient.GetSecret(svc.ctx, getSecretReq)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (svc *secretClient) getLatestSecretVersion(name string) (*secretmanagerpb.S
 		Name: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", svc.project, name),
 	}
 
-	secret, err := svc.client.GetSecretVersion(svc.ctx, req)
+	secret, err := svc.gcpClient.GetSecretVersion(svc.ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (svc *secretClient) listVersions(name string) ([]*secretmanagerpb.SecretVer
 		Parent:   fmt.Sprintf("projects/%s/secrets/%s", svc.project, name),
 	}
 
-	versions := svc.client.ListSecretVersions(svc.ctx, req)
+	versions := svc.gcpClient.ListSecretVersions(svc.ctx, req)
 
 	var output []*secretmanagerpb.SecretVersion
 
@@ -113,7 +113,7 @@ func (svc *secretClient) deletePrior(versions []*secretmanagerpb.SecretVersion) 
 			continue
 		}
 		req := &secretmanagerpb.DestroySecretVersionRequest{Name: v.Name}
-		_, err := svc.client.DestroySecretVersion(svc.ctx, req)
+		_, err := svc.gcpClient.DestroySecretVersion(svc.ctx, req)
 		if err != nil {
 			return err
 		}

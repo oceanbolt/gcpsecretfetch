@@ -2,6 +2,7 @@ package gcpsecretfetch
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -10,79 +11,9 @@ import (
 
 const GCP_PROJECT = "ob-playground"
 
-func TestInitializeConfig(t *testing.T) {
-
-	type config struct {
-		SECRET_IDENTIFIER   string
-		FALLBACK_IDENTIFIER string
-	}
-
-	var cfg config
-
-	err := InitializeConfig(&cfg, GCP_PROJECT, PRIORITIZE)
-	assert.NoError(t, err)
-	assert.Equal(t, cfg.FALLBACK_IDENTIFIER, "VALUE")
-	assert.Equal(t, cfg.SECRET_IDENTIFIER, "SECRET_VALUE")
-
-}
-
-func TestMissingSecret(t *testing.T) {
-
-	type config struct {
-		MISSING_SECRET string
-	}
-
-	var cfg config
-
-	err := InitializeConfig(&cfg, GCP_PROJECT, PRIORITIZE)
-	assert.Error(t, err)
-
-}
-
-func TestInitializeConfigMissing(t *testing.T) {
-
-	type config struct {
-		SECRET_IDENTIFIER   string
-		FALLBACK_IDENTIFIER string
-	}
-
-	var cfg config
-
-	err := InitializeConfig(&cfg, GCP_PROJECT, DISABLE)
-	assert.Error(t, err)
-
-}
-
-func TestInitializeConfigEnvPrioritize(t *testing.T) {
-
-	type config struct {
-		BOTH_IDENTIFIER string
-	}
-
-	var cfg config
-
-	err := InitializeConfig(&cfg, GCP_PROJECT, PRIORITIZE)
-	assert.NoError(t, err)
-	assert.Equal(t, cfg.BOTH_IDENTIFIER, "ENV")
-
-	err = InitializeConfig(&cfg, GCP_PROJECT, FALLBACK)
-	assert.NoError(t, err)
-	assert.Equal(t, cfg.BOTH_IDENTIFIER, "GCP")
-
-}
-
-func TestSetSecrets(t *testing.T) {
-
-	err := UpdateSecrets(GCP_PROJECT, map[string]string{"SECRET_IDENTIFIER": "SECRET_VALUE", "BOTH_IDENTIFIER": "GCP"}, true)
-	assert.NoError(t, err)
-
-}
-
 func TestBadProjectUpdate(t *testing.T) {
-
 	err := UpdateSecrets("bad-project-name-alkdjwopiunhauwihd", map[string]string{"SECRET_IDENTIFIER": "SECRET_VALUE", "BOTH_IDENTIFIER": "GCP"}, true)
 	assert.Error(t, err)
-
 }
 
 func TestBadProjectInitialize(t *testing.T) {
@@ -93,7 +24,7 @@ func TestBadProjectInitialize(t *testing.T) {
 
 	var cfg config
 
-	err := InitializeConfig(&cfg, "aawdwadawdawdwaawdawdawdawd", DISABLE)
+	err := InitializeConfig(&cfg, "aawdwadawdawdwaawdawdawdawd")
 	assert.Error(t, err)
 	fmt.Println(cfg)
 }
@@ -104,16 +35,19 @@ func TestNotAPointer(t *testing.T) {
 		BOTH_IDENTIFIER string
 	}
 	var cfg config
-	err := InitializeConfig(cfg, "bad-project-name-alkdjwopiunhauwihd", FALLBACK)
+	err := InitializeConfig(cfg, "bad-project-name-alkdjwopiunhauwihd")
 	assert.Error(t, err)
 
 }
 
 func TestNotAStruct(t *testing.T) {
-
-	err := InitializeConfig("cfg", "bad-project-name-alkdjwopiunhauwihd", FALLBACK)
+	err := InitializeConfig("cfg", "bad-project-name-alkdjwopiunhauwihd")
 	assert.Error(t, err)
-
+}
+func TestNotAStructPointer(t *testing.T) {
+	cfg := "cfg"
+	err := InitializeConfig(&cfg, "bad-project-name-alkdjwopiunhauwihd")
+	assert.Error(t, err)
 }
 
 func TestStructWithNonStringField(t *testing.T) {
@@ -123,23 +57,39 @@ func TestStructWithNonStringField(t *testing.T) {
 		INTFIELD        int
 	}
 	var cfg config
-	err := InitializeConfig(cfg, "bad-project-name-alkdjwopiunhauwihd", FALLBACK)
+	err := InitializeConfig(&cfg, "bad-project-name-alkdjwopiunhauwihd")
 	assert.Error(t, err)
 
 }
 
-func TestStructYaml(t *testing.T) {
+func TestViperCase(t *testing.T) {
+	v := viper.New()
 
 	type config struct {
-		MyvaL int
-		Key   struct {
-			Nested string
-		}
+		BOTH_IDENTIFIER string
 	}
 
 	var cfg config
-	err := InitializeConfigYaml(&cfg, GCP_PROJECT, "yaml-example")
+
+	err := InitializeConfig(&cfg, GCP_PROJECT, WithViper(v), WithConcurrency(1))
 	assert.NoError(t, err)
+	assert.NotEmpty(t, cfg.BOTH_IDENTIFIER)
+	assert.Equal(t, v.GetString("both_identifier"), cfg.BOTH_IDENTIFIER)
+
+}
+
+func TestViperCaseMissingVar(t *testing.T) {
+	v := viper.New()
+
+	type config struct {
+		MissingSecret string
+	}
+
+	var cfg config
+
+	err := InitializeConfig(&cfg, GCP_PROJECT, WithViper(v))
+	assert.Error(t, err)
+	assert.Empty(t, cfg.MissingSecret)
 
 }
 
