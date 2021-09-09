@@ -114,7 +114,7 @@ func (svc *secretClient) fetch(s reflect.Value) error {
 
 	})
 
-	defer ants.Release()
+	defer p.Release()
 
 	for i := 0; i < s.NumField(); i++ {
 		f := s.Field(i)

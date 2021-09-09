@@ -3,20 +3,73 @@ package gcpsecretfetch
 
 import (
 	"fmt"
+	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	"strings"
+	"sync"
 )
 
-func UpdateSecrets(project string, secrets map[string]string, disablePrior bool) error {
-	grabber, err := newClient(project, nil)
+func UpdateSecrets(project string, secrets map[string]string, opts ...ConfigOption) error {
+	grabber, err := newClient(project, opts)
 	if err != nil {
 		return err
 	}
+
+	return grabber.set(secrets)
+}
+
+func (svc *secretClient) set(secrets map[string]string) error {
+	var wg sync.WaitGroup
+
+	type errorStruct struct {
+		err  error
+		name string
+	}
+
+	type params struct {
+		secretName  string
+		secretValue string
+	}
+
+	c := make(chan errorStruct, len(secrets))
+
+	p, _ := ants.NewPoolWithFunc(svc.concurrency, func(i interface{}) {
+		defer wg.Done()
+		p := i.(params)
+
+		err := svc.updateSingleVersion(p.secretName, p.secretValue, svc.disablePrior)
+		if err == nil {
+			return
+		}
+		c <- errorStruct{err, p.secretName}
+
+	})
+
+	defer p.Release()
+
 	for k, v := range secrets {
-		if err := grabber.updateSingleVersion(k, v, disablePrior); err != nil {
+		wg.Add(1)
+		err := p.Invoke(params{secretName: k, secretValue: v})
+		if err != nil {
 			return err
 		}
 	}
+
+	wg.Wait()
+
+	close(c)
+
+	var errs []string
+	for e := range c {
+		errs = append(errs, e.err.Error())
+	}
+
+	if len(errs) != 0 {
+		return errors.New("Error when fetching secrets: " + strings.Join(errs, ", "))
+	}
+
 	return nil
 }
 
@@ -25,6 +78,12 @@ func (svc *secretClient) updateSingleVersion(secretName string, secretValue stri
 	if err != nil {
 		return err
 	}
+	latest, err := svc.accessSecretVersion(secretName)
+	if string(latest) == secretValue {
+		log.Debug().Msg("skipping secret " + secretName + ", value was unchanged")
+		return nil
+	}
+
 	_, err = svc.addVersion(secretName, secretValue)
 	if err != nil {
 		return err

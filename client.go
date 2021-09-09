@@ -10,11 +10,12 @@ import (
 const defaultConcurrency = 50
 
 type secretClient struct {
-	gcpClient   *secretmanager.Client
-	project     string
-	ctx         context.Context
-	v           *viper.Viper
-	concurrency int
+	gcpClient    *secretmanager.Client
+	project      string
+	ctx          context.Context
+	v            *viper.Viper
+	concurrency  int
+	disablePrior bool
 }
 
 type ConfigOption func(client *secretClient)
@@ -28,6 +29,12 @@ func WithViper(v *viper.Viper) ConfigOption {
 func WithConcurrency(n int) ConfigOption {
 	return func(client *secretClient) {
 		client.concurrency = n
+	}
+}
+
+func WithDisablePrior() ConfigOption {
+	return func(client *secretClient) {
+		client.disablePrior = true
 	}
 }
 
