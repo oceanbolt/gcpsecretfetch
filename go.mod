@@ -1,4 +1,4 @@
-module github.com/oceanbolt/gcp-secret-fetch
+module github.com/oceanbolt/gcpsecretfetch
 
 go 1.15
 
