@@ -30,4 +30,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Test
+        env:
+          GCP_SECRET_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: make test.cover
