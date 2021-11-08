@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"google.golang.org/api/option"
 )
 
 const defaultConcurrency = 50
@@ -40,7 +41,7 @@ func WithDisablePrior() ConfigOption {
 
 func newClient(project string, opts []ConfigOption) (*secretClient, error) {
 	ctx := context.Background()
-	gcpClient, err := secretmanager.NewClient(ctx)
+	gcpClient, err := secretmanager.NewClient(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create secretmanager client")
 	}
