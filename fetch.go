@@ -133,7 +133,7 @@ func (svc *secretClient) fetch(s reflect.Value) error {
 
 	var errs []string
 	for e := range c {
-		errs = append(errs, e.err.Error())
+		errs = append(errs, e.name+": "+e.err.Error())
 	}
 
 	if len(errs) != 0 {
