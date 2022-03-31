@@ -28,3 +28,5 @@ var cfg config
 
 err := InitializeConfig(&cfg, "my-gcp-project", WithViper(v))
 ```
+
+## Extract
